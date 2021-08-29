@@ -1,12 +1,20 @@
 extern crate nalgebra_glm as glm;
-use std::{ mem, ptr, os::raw::c_void };
+
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-use std::sync::{Mutex, Arc, RwLock};
+use std::{mem, os::raw::c_void, ptr};
 
 mod shader;
 mod util;
 
-use glutin::event::{Event, WindowEvent, DeviceEvent, KeyboardInput, ElementState::{Pressed, Released}, VirtualKeyCode::{self, *}};
+use glutin::event::{
+    DeviceEvent,
+    ElementState::{Pressed, Released},
+    Event, KeyboardInput,
+    VirtualKeyCode::{self, *},
+    WindowEvent,
+};
+
 use glutin::event_loop::ControlFlow;
 
 const SCREEN_W: u32 = 800;
@@ -36,10 +44,56 @@ fn offset<T>(n: u32) -> *const c_void {
 // Get a null pointer (equivalent to an offset of 0)
 // ptr::null()
 
-
-
 // == // Modify and complete the function below for the first task
-// unsafe fn FUNCTION_NAME(ARGUMENT_NAME: &Vec<f32>, ARGUMENT_NAME: &Vec<u32>) -> u32 { } 
+// unsafe fn FUNCTION_NAME(ARGUMENT_NAME: &Vec<f32>, ARGUMENT_NAME: &Vec<u32>) -> u32 { }
+
+unsafe fn make_vbo(values: &Vec<f32>) {
+    let mut buffer_id = 0u32;
+    // Make buffer
+    gl::GenBuffers(1, &mut buffer_id as *mut u32);
+
+    // Fill buffer with provided data
+    gl::BindBuffer(gl::ARRAY_BUFFER, buffer_id);
+    gl::BufferData(
+        gl::ARRAY_BUFFER,
+        byte_size_of_array(values),
+        pointer_to_array(values),
+        gl::STATIC_DRAW,
+    );
+}
+
+unsafe fn make_index_buffer(values: &Vec<u32>) {
+    let mut buffer_id = 0u32;
+    // Make buffer
+    gl::GenBuffers(1, &mut buffer_id as *mut u32);
+
+    // Fill buffer with provided data
+    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer_id);
+    gl::BufferData(
+        gl::ELEMENT_ARRAY_BUFFER,
+        byte_size_of_array(values),
+        pointer_to_array(values),
+        gl::STATIC_DRAW,
+    );
+}
+
+unsafe fn make_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
+    let mut id = 0u32;
+    // Make VAO
+    gl::GenVertexArrays(1, &mut id as *mut u32);
+    gl::BindVertexArray(id);
+
+    // Make and fill buffer
+    make_vbo(vertices);
+
+    // Set up VAO attribute
+    gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0, ptr::null());
+    gl::EnableVertexAttribArray(0);
+
+    make_index_buffer(indices);
+
+    id
+}
 
 fn main() {
     // Set up the necessary objects to deal with windows and event handling
@@ -48,8 +102,7 @@ fn main() {
         .with_title("Gloom-rs")
         .with_resizable(false)
         .with_inner_size(glutin::dpi::LogicalSize::new(SCREEN_W, SCREEN_H));
-    let cb = glutin::ContextBuilder::new()
-        .with_vsync(true);
+    let cb = glutin::ContextBuilder::new().with_vsync(true);
     let windowed_context = cb.build_windowed(wb, &el).unwrap();
     // Uncomment these if you want to use the mouse for controls, but want it to be confined to the screen and/or invisible.
     // windowed_context.window().set_cursor_grab(true).expect("failed to grab cursor");
@@ -87,27 +140,30 @@ fn main() {
             gl::DebugMessageCallback(Some(util::debug_callback), ptr::null());
 
             // Print some diagnostics
-            println!("{}: {}", util::get_gl_string(gl::VENDOR), util::get_gl_string(gl::RENDERER));
+            println!(
+                "{}: {}",
+                util::get_gl_string(gl::VENDOR),
+                util::get_gl_string(gl::RENDERER)
+            );
             println!("OpenGL\t: {}", util::get_gl_string(gl::VERSION));
-            println!("GLSL\t: {}", util::get_gl_string(gl::SHADING_LANGUAGE_VERSION));
+            println!(
+                "GLSL\t: {}",
+                util::get_gl_string(gl::SHADING_LANGUAGE_VERSION)
+            );
         }
 
-        // == // Set up your VAO here
-        unsafe {
+        let (vertices, indices) = util::generate_triangles(3, 3);
 
-        }
+        // Set up VAO
+        let vao_id = unsafe { make_vao(&vertices, &indices) };
 
-        // Basic usage of shader helper:
-        // The example code below returns a shader object, which contains the field `.program_id`.
-        // The snippet is not enough to do the assignment, and will need to be modified (outside of
-        // just using the correct path), but it only needs to be called once
-        //
-        //     shader::ShaderBuilder::new()
-        //        .attach_file("./path/to/shader.file")
-        //        .link();
-        unsafe {
-
-        }
+        // Load shaders
+        let shader = unsafe {
+            shader::ShaderBuilder::new()
+                .attach_file("shaders/simple.vert")
+                .attach_file("shaders/simple.frag")
+                .link()
+        };
 
         // Used to demonstrate keyboard handling -- feel free to remove
         let mut _arbitrary_number = 0.0;
@@ -127,21 +183,17 @@ fn main() {
                     match key {
                         VirtualKeyCode::A => {
                             _arbitrary_number += delta_time;
-                        },
+                        }
                         VirtualKeyCode::D => {
                             _arbitrary_number -= delta_time;
-                        },
+                        }
 
-
-                        _ => { }
+                        _ => {}
                     }
                 }
             }
             // Handle mouse movement. delta contains the x and y movement of the mouse since last frame in pixels
             if let Ok(mut delta) = mouse_delta.lock() {
-
-
-
                 *delta = (0.0, 0.0);
             }
 
@@ -149,12 +201,14 @@ fn main() {
                 gl::ClearColor(0.76862745, 0.71372549, 0.94901961, 1.0); // moon raker, full opacity
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-                // Issue the necessary commands to draw your scene here
-
-
-
-
-
+                // Draw scene
+                gl::DrawElements(
+                    gl::TRIANGLES,
+                    indices.len() as i32,
+                    gl::UNSIGNED_INT,
+                    ptr::null(),
+                );
+                gl::UseProgram(shader.program_id);
             }
 
             context.swap_buffers().unwrap();
@@ -185,13 +239,26 @@ fn main() {
         }
 
         match event {
-            Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
                 *control_flow = ControlFlow::Exit;
-            },
+            }
             // Keep track of currently pressed keys to send to the rendering thread
-            Event::WindowEvent { event: WindowEvent::KeyboardInput {
-                input: KeyboardInput { state: key_state, virtual_keycode: Some(keycode), .. }, .. }, .. } => {
-
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: key_state,
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
                 if let Ok(mut keys) = arc_pressed_keys.lock() {
                     match key_state {
                         Released => {
@@ -199,7 +266,7 @@ fn main() {
                                 let i = keys.iter().position(|&k| k == keycode).unwrap();
                                 keys.remove(i);
                             }
-                        },
+                        }
                         Pressed => {
                             if !keys.contains(&keycode) {
                                 keys.push(keycode);
@@ -212,20 +279,23 @@ fn main() {
                 match keycode {
                     Escape => {
                         *control_flow = ControlFlow::Exit;
-                    },
+                    }
                     Q => {
                         *control_flow = ControlFlow::Exit;
                     }
-                    _ => { }
+                    _ => {}
                 }
-            },
-            Event::DeviceEvent { event: DeviceEvent::MouseMotion { delta }, .. } => {
+            }
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta },
+                ..
+            } => {
                 // Accumulate mouse movement
                 if let Ok(mut position) = arc_mouse_delta.lock() {
                     *position = (position.0 + delta.0 as f32, position.1 + delta.1 as f32);
                 }
-            },
-            _ => { }
+            }
+            _ => {}
         }
     });
 }

@@ -1,8 +1,6 @@
-# Gloom-rs
+# Based on [Gloom-rs](https://github.com/pbsds/gloom-rs)
 
 To get started, make sure you have `git`, `cargo` and, `rustc` installed and available.
-
-	git clone https://github.com/pbsds/gloom-rs
 
 ## Report
 
