@@ -44,53 +44,38 @@ fn offset<T>(n: u32) -> *const c_void {
 // Get a null pointer (equivalent to an offset of 0)
 // ptr::null()
 
-// == // Modify and complete the function below for the first task
-// unsafe fn FUNCTION_NAME(ARGUMENT_NAME: &Vec<f32>, ARGUMENT_NAME: &Vec<u32>) -> u32 { }
-
-unsafe fn make_vbo(values: &Vec<f32>) {
+// Makes a new buffer and fills it with the given data values
+unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) {
     let mut buffer_id = 0u32;
     // Make buffer
     gl::GenBuffers(1, &mut buffer_id as *mut u32);
 
     // Fill buffer with provided data
-    gl::BindBuffer(gl::ARRAY_BUFFER, buffer_id);
+    gl::BindBuffer(target, buffer_id);
     gl::BufferData(
-        gl::ARRAY_BUFFER,
+        target,
         byte_size_of_array(values),
         pointer_to_array(values),
         gl::STATIC_DRAW,
     );
 }
 
-unsafe fn make_index_buffer(values: &Vec<u32>) {
-    let mut buffer_id = 0u32;
-    // Make buffer
-    gl::GenBuffers(1, &mut buffer_id as *mut u32);
-
-    // Fill buffer with provided data
-    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer_id);
-    gl::BufferData(
-        gl::ELEMENT_ARRAY_BUFFER,
-        byte_size_of_array(values),
-        pointer_to_array(values),
-        gl::STATIC_DRAW,
-    );
-}
-
+// Makes a new VAO, feeds the vertices to a new VBO for said VAO and makes an index buffer
+// with the given indices
 unsafe fn make_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
     let mut id = 0u32;
-    // Make VAO
+    // Make and bind VAO
     gl::GenVertexArrays(1, &mut id as *mut u32);
     gl::BindVertexArray(id);
 
     // Make and fill buffer
-    make_vbo(vertices);
+    make_buffer(gl::ARRAY_BUFFER, vertices);
 
     // Set up VAO attribute
     gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0, ptr::null());
     gl::EnableVertexAttribArray(0);
 
-    make_index_buffer(indices);
+    make_buffer(gl::ELEMENT_ARRAY_BUFFER, indices);
 
     id
 }
@@ -152,7 +137,16 @@ fn main() {
             );
         }
 
-        let (vertices, indices) = util::generate_triangles(3, 3);
+        // Generates vertices and indices for a grid of evenly distributed triangles
+        //let (vertices, indices) = util::generate_triangles(30, 40);
+
+        let vertices = vec![
+            0.6, -0.8, -1.0,
+            0.0, 0.4, 0.0,
+            -0.8, -0.2, 1.0
+        ];
+
+        let indices = vec![0, 1, 2];
 
         // Set up VAO
         let vao_id = unsafe { make_vao(&vertices, &indices) };
@@ -201,6 +195,9 @@ fn main() {
                 gl::ClearColor(0.76862745, 0.71372549, 0.94901961, 1.0); // moon raker, full opacity
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
+                // Make sure the VAO is selected before we call draw
+                gl::BindVertexArray(vao_id);
+
                 // Draw scene
                 gl::DrawElements(
                     gl::TRIANGLES,
@@ -208,7 +205,7 @@ fn main() {
                     gl::UNSIGNED_INT,
                     ptr::null(),
                 );
-                gl::UseProgram(shader.program_id);
+                shader.activate();
             }
 
             context.swap_buffers().unwrap();
