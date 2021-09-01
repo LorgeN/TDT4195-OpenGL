@@ -200,7 +200,7 @@ fn main() {
             }
 
             hue = hue + 0.001;
-            rotation = rotation + 0.05 % (2.0 * std::f32::consts::PI);
+            rotation = rotation + 0.1 % (2.0 * std::f32::consts::PI);
 
             unsafe {
                 gl::ClearColor(0.76862745, 0.71372549, 0.94901961, 1.0); // moon raker, full opacity
