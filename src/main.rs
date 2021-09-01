@@ -6,6 +6,7 @@ use std::{mem, os::raw::c_void, ptr};
 
 mod shader;
 mod util;
+mod shapes;
 
 use glutin::event::{
     DeviceEvent,
@@ -137,9 +138,11 @@ fn main() {
             );
         }
 
-        // Generates vertices and indices for a grid of evenly distributed triangles
-        //let (vertices, indices) = util::generate_triangles(30, 40);
+        //let (vertices, indices) = shapes::generate_triangles(30, 40);
+        //let (vertices, indices) = shapes::generate_circle(0.5, 1000);
+        let (vertices, indices) = shapes::generate_spiral(1.5, 500, 20, 0.05);
 
+        /*
         let vertices = vec![
             0.6, -0.8, -1.0,
             0.0, 0.4, 0.0,
@@ -147,6 +150,7 @@ fn main() {
         ];
 
         let indices = vec![0, 1, 2];
+        */
 
         // Set up VAO
         let vao_id = unsafe { make_vao(&vertices, &indices) };
@@ -154,8 +158,8 @@ fn main() {
         // Load shaders
         let shader = unsafe {
             shader::ShaderBuilder::new()
-                .attach_file("shaders/simple.vert")
-                .attach_file("shaders/simple.frag")
+                .attach_file("shaders/rotate.vert")
+                .attach_file("shaders/change.frag")
                 .link()
         };
 
@@ -164,6 +168,10 @@ fn main() {
 
         let first_frame_time = std::time::Instant::now();
         let mut last_frame_time = first_frame_time;
+        
+        let mut hue = 0.0;
+        let mut rotation: f32 = 0.0;
+
         // The main rendering loop
         loop {
             let now = std::time::Instant::now();
@@ -191,6 +199,9 @@ fn main() {
                 *delta = (0.0, 0.0);
             }
 
+            hue = hue + 0.001;
+            rotation = rotation + 0.05 % (2.0 * std::f32::consts::PI);
+
             unsafe {
                 gl::ClearColor(0.76862745, 0.71372549, 0.94901961, 1.0); // moon raker, full opacity
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -205,7 +216,11 @@ fn main() {
                     gl::UNSIGNED_INT,
                     ptr::null(),
                 );
+
                 shader.activate();
+
+                gl::Uniform2f(2, rotation.cos(), rotation.sin());
+                gl::Uniform3f(3, hue, 1.0, 1.0);
             }
 
             context.swap_buffers().unwrap();
