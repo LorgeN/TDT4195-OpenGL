@@ -5,8 +5,8 @@ use std::thread;
 use std::{mem, os::raw::c_void, ptr};
 
 mod shader;
-mod util;
 mod shapes;
+mod util;
 
 use glutin::event::{
     DeviceEvent,
@@ -138,7 +138,7 @@ fn main() {
             );
         }
 
-        //let (vertices, indices) = shapes::generate_triangles(30, 40);
+        //let (vertices, indices) = shapes::generate_triangles(1, 1);
         //let (vertices, indices) = shapes::generate_circle(0.5, 1000);
         let (vertices, indices) = shapes::generate_spiral(1.5, 500, 20, 0.05);
 
@@ -168,7 +168,6 @@ fn main() {
 
         let first_frame_time = std::time::Instant::now();
         let mut last_frame_time = first_frame_time;
-        
         let mut hue = 0.0;
         let mut rotation: f32 = 0.0;
 
@@ -219,7 +218,14 @@ fn main() {
 
                 shader.activate();
 
-                gl::Uniform2f(2, rotation.cos(), rotation.sin());
+                let rot_matrix = glm::Mat4::from([
+                    [rotation.cos(), -rotation.sin(), 0.0, 0.0],
+                    [rotation.sin(), rotation.cos(), 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]);
+
+                gl::UniformMatrix4fv(2, 1, gl::FALSE, rot_matrix.as_ptr());
                 gl::Uniform3f(3, hue, 1.0, 1.0);
             }
 

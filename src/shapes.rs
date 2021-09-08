@@ -44,33 +44,33 @@ pub fn generate_circle(r: f32, segments: u32) -> (Vec<f32>, Vec<u32>) {
     (vert, indices)
 }
 
-pub fn generate_spiral(r: f32, segments: u32, circles: u32, end_width: f32) -> (Vec<f32>, Vec<u32>) {
+pub fn generate_spiral(total_radius: f32, segments: u32, circles: u32, end_width: f32) -> (Vec<f32>, Vec<u32>) {
     let mut vert: Vec<f32> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
     let total_seg = segments * circles;
 
     let mut width = 0.01;
-    let mut curr_r = 0.01;
+    let mut radius = 0.01;
 
-    let w_inc = end_width / ((total_seg - 1) as f32);
-    let r_inc = (r - curr_r) / ((total_seg - 1) as f32);
+    let w_inc = (end_width - width) / ((total_seg - 1) as f32);
+    let r_inc = (total_radius - radius) / ((total_seg - 1) as f32);
 
     for seg in 0..total_seg {
         let angle = 2.0 * std::f32::consts::PI * (seg % segments) as f32 / segments as f32;
         
         vert.extend([
             // Inner point
-            (curr_r - width) * angle.sin(),
-            (curr_r - width) * angle.cos(),
+            (radius - width) * angle.sin(),
+            (radius - width) * angle.cos(),
             0.0,
             // Outer point
-            curr_r * angle.sin(),
-            curr_r * angle.cos(),
+            radius * angle.sin(),
+            radius * angle.cos(),
             0.0
         ]);
 
-        curr_r = curr_r + r_inc;
+        radius = radius + r_inc;
         width = width + w_inc;
 
         let index = seg * 2;
