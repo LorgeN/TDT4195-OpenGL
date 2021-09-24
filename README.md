@@ -2,14 +2,8 @@
 
 To get started, make sure you have `git`, `cargo` and, `rustc` installed and available.
 
-## Report
+## Running
 
-You're free to write your report any way you'd like, as long as it is delivered as a PDF file.
+Run using `cargo run`.
 
-To spread the word of *the one true way*, I have included a `pandoc` report skeleton in the `report` folder.
-To use it make sure you have `pandoc` installed along with a latex engine.
-Make sure it works before using it to write your report.
-
-## Code delivery
-
-To make a code archive (`source.zip`) for uploading on blackboard run either `create_code_archive_for_blackboard_LINUX.sh` or `create_code_archive_for_blackboard_WINDOWS.bat`.
+**Disclaimer:** This is the first time I've ever used rust. Expect bad stuff.

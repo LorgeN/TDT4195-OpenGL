@@ -1,5 +1,10 @@
-// Utility function for generating vertices and indices for a grid of triangles
-pub fn generate_triangles(x: u32, y: u32) -> (Vec<f32>, Vec<u32>) {
+/// Utility function for generating a single triangle
+pub fn generate_triangle_at(x: f32, y: f32, z: f32, size: f32) -> Vec<f32> {
+    vec![x, y + size, z, x - size, y - size, z, x + size, y - size, z]
+}
+
+/// Utility function for generating vertices and indices for a grid of triangles
+pub fn generate_triangles(x: u32, y: u32, z: Option<f32>) -> (Vec<f32>, Vec<u32>) {
     let mut vert: Vec<f32> = Vec::new();
 
     let x_dist = 2.0 / (x as f32 + 1.0);
@@ -7,6 +12,8 @@ pub fn generate_triangles(x: u32, y: u32) -> (Vec<f32>, Vec<u32>) {
 
     let x_size = x_dist / 4.0;
     let y_size = y_dist / 4.0;
+
+    let z_val = z.unwrap_or(0.0);
 
     for x_off in 1..=x {
         for y_off in 1..=y {
@@ -16,13 +23,13 @@ pub fn generate_triangles(x: u32, y: u32) -> (Vec<f32>, Vec<u32>) {
             vert.extend([
                 x_curr,
                 y_curr + y_size,
-                0.0,
+                z_val,
                 x_curr - x_size,
                 y_curr - y_size,
-                0.0,
+                z_val,
                 x_curr + x_size,
                 y_curr - y_size,
-                0.0,
+                z_val,
             ]);
         }
     }
@@ -30,6 +37,7 @@ pub fn generate_triangles(x: u32, y: u32) -> (Vec<f32>, Vec<u32>) {
     (vert, (0..(x * y * 3)).collect())
 }
 
+/// Utility function for generating a circle
 pub fn generate_circle(r: f32, segments: u32) -> (Vec<f32>, Vec<u32>) {
     let mut vert = vec![0.0, 0.0, 0.0];
     let mut indices: Vec<u32> = Vec::new();
@@ -44,7 +52,13 @@ pub fn generate_circle(r: f32, segments: u32) -> (Vec<f32>, Vec<u32>) {
     (vert, indices)
 }
 
-pub fn generate_spiral(total_radius: f32, segments: u32, circles: u32, end_width: f32) -> (Vec<f32>, Vec<u32>) {
+/// Utility function for generating a spiral
+pub fn generate_spiral(
+    total_radius: f32,
+    segments: u32,
+    circles: u32,
+    end_width: f32,
+) -> (Vec<f32>, Vec<u32>) {
     let mut vert: Vec<f32> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
@@ -58,7 +72,6 @@ pub fn generate_spiral(total_radius: f32, segments: u32, circles: u32, end_width
 
     for seg in 0..total_seg {
         let angle = 2.0 * std::f32::consts::PI * (seg % segments) as f32 / segments as f32;
-        
         vert.extend([
             // Inner point
             (radius - width) * angle.sin(),
@@ -67,7 +80,7 @@ pub fn generate_spiral(total_radius: f32, segments: u32, circles: u32, end_width
             // Outer point
             radius * angle.sin(),
             radius * angle.cos(),
-            0.0
+            0.0,
         ]);
 
         radius = radius + r_inc;

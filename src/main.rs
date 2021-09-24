@@ -4,8 +4,13 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::{mem, os::raw::c_void, ptr};
 
+pub use self::camera::Camera;
+
+mod camera;
+mod colors;
 mod shader;
 mod shapes;
+mod tasks;
 mod util;
 
 use glutin::event::{
@@ -23,21 +28,22 @@ const SCREEN_H: u32 = 600;
 
 // == // Helper functions to make interacting with OpenGL a little bit prettier. You *WILL* need these! // == //
 // The names should be pretty self explanatory
+
 fn byte_size_of_array<T>(val: &[T]) -> isize {
     std::mem::size_of_val(&val[..]) as isize
 }
 
-// Get the OpenGL-compatible pointer to an arbitrary array of numbers
+/// Get the OpenGL-compatible pointer to an arbitrary array of numbers
 fn pointer_to_array<T>(val: &[T]) -> *const c_void {
     &val[0] as *const T as *const c_void
 }
 
-// Get the size of the given type in bytes
+/// Get the size of the given type in bytes
 fn size_of<T>() -> i32 {
     mem::size_of::<T>() as i32
 }
 
-// Get an offset in bytes for n units of type T
+/// Get an offset in bytes for n units of type T
 fn offset<T>(n: u32) -> *const c_void {
     (n * mem::size_of::<T>() as u32) as *const T as *const c_void
 }
@@ -45,8 +51,9 @@ fn offset<T>(n: u32) -> *const c_void {
 // Get a null pointer (equivalent to an offset of 0)
 // ptr::null()
 
-// Makes a new buffer and fills it with the given data values
-unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) {
+/// Makes a new buffer and fills it with the given data values. Leaves the created
+/// buffer bound
+unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) -> u32 {
     let mut buffer_id = 0u32;
     // Make buffer
     gl::GenBuffers(1, &mut buffer_id as *mut u32);
@@ -59,22 +66,27 @@ unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) {
         pointer_to_array(values),
         gl::STATIC_DRAW,
     );
+
+    buffer_id
 }
 
-// Makes a new VAO, feeds the vertices to a new VBO for said VAO and makes an index buffer
-// with the given indices
-unsafe fn make_vao(vertices: &Vec<f32>, indices: &Vec<u32>) -> u32 {
+/// Makes a new VAO, feeds the vertices to a new VBO for said VAO and makes an index buffer
+/// with the given indices
+unsafe fn make_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
     let mut id = 0u32;
     // Make and bind VAO
     gl::GenVertexArrays(1, &mut id as *mut u32);
     gl::BindVertexArray(id);
 
-    // Make and fill buffer
+    // Make and fill buffer. This function leaves the created VBO bound
     make_buffer(gl::ARRAY_BUFFER, vertices);
-
-    // Set up VAO attribute
     gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, 0, ptr::null());
+
+    make_buffer(gl::ARRAY_BUFFER, colors);
+    gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, ptr::null());
+
     gl::EnableVertexAttribArray(0);
+    gl::EnableVertexAttribArray(1);
 
     make_buffer(gl::ELEMENT_ARRAY_BUFFER, indices);
 
@@ -90,9 +102,12 @@ fn main() {
         .with_inner_size(glutin::dpi::LogicalSize::new(SCREEN_W, SCREEN_H));
     let cb = glutin::ContextBuilder::new().with_vsync(true);
     let windowed_context = cb.build_windowed(wb, &el).unwrap();
-    // Uncomment these if you want to use the mouse for controls, but want it to be confined to the screen and/or invisible.
-    // windowed_context.window().set_cursor_grab(true).expect("failed to grab cursor");
-    // windowed_context.window().set_cursor_visible(false);
+
+    windowed_context
+        .window()
+        .set_cursor_grab(true)
+        .expect("failed to grab cursor");
+    windowed_context.window().set_cursor_visible(false);
 
     // Set up a shared vector for keeping track of currently pressed keys
     let arc_pressed_keys = Arc::new(Mutex::new(Vec::<VirtualKeyCode>::with_capacity(10)));
@@ -103,6 +118,17 @@ fn main() {
     let arc_mouse_delta = Arc::new(Mutex::new((0f32, 0f32)));
     // Make a reference of this tuple to send to the render thread
     let mouse_delta = Arc::clone(&arc_mouse_delta);
+
+    let mut camera = Camera {
+        x: 0.0,
+        y: -2.0,
+        z: -1.0,
+        yaw: 0.0,
+        pitch: -1.2,
+    };
+
+    // This will not change in our case, so no need to recalculate every frame
+    let fovy = (SCREEN_H as f32) / (SCREEN_W as f32);
 
     // Spawn a separate thread for rendering, so event handling doesn't block rendering
     let render_thread = thread::spawn(move || {
@@ -138,38 +164,21 @@ fn main() {
             );
         }
 
-        //let (vertices, indices) = shapes::generate_triangles(1, 1);
-        //let (vertices, indices) = shapes::generate_circle(0.5, 1000);
-        let (vertices, indices) = shapes::generate_spiral(1.5, 500, 20, 0.05);
-
-        /*
-        let vertices = vec![
-            0.6, -0.8, -1.0,
-            0.0, 0.4, 0.0,
-            -0.8, -0.2, 1.0
-        ];
-
-        let indices = vec![0, 1, 2];
-        */
+        let (vertices, indices, colors) = tasks::assignment2_task4b();
 
         // Set up VAO
-        let vao_id = unsafe { make_vao(&vertices, &indices) };
+        let vao_id = unsafe { make_vao(&vertices, &indices, &colors) };
 
         // Load shaders
         let shader = unsafe {
             shader::ShaderBuilder::new()
-                .attach_file("shaders/rotate.vert")
-                .attach_file("shaders/change.frag")
+                .attach_file("shaders/simple.vert")
+                .attach_file("shaders/simple.frag")
                 .link()
         };
 
-        // Used to demonstrate keyboard handling -- feel free to remove
-        let mut _arbitrary_number = 0.0;
-
         let first_frame_time = std::time::Instant::now();
         let mut last_frame_time = first_frame_time;
-        let mut hue = 0.0;
-        let mut rotation: f32 = 0.0;
 
         // The main rendering loop
         loop {
@@ -183,23 +192,33 @@ fn main() {
                 for key in keys.iter() {
                     match key {
                         VirtualKeyCode::A => {
-                            _arbitrary_number += delta_time;
+                            camera.move_left(delta_time);
                         }
                         VirtualKeyCode::D => {
-                            _arbitrary_number -= delta_time;
+                            camera.move_right(delta_time);
                         }
-
+                        VirtualKeyCode::W => {
+                            camera.move_forward(delta_time);
+                        }
+                        VirtualKeyCode::S => {
+                            camera.move_backward(delta_time);
+                        }
+                        VirtualKeyCode::LShift => {
+                            camera.move_down(delta_time);
+                        }
+                        VirtualKeyCode::Space => {
+                            camera.move_up(delta_time);
+                        }
                         _ => {}
                     }
                 }
             }
+
             // Handle mouse movement. delta contains the x and y movement of the mouse since last frame in pixels
             if let Ok(mut delta) = mouse_delta.lock() {
+                camera.move_mouse(delta.0, delta.1);
                 *delta = (0.0, 0.0);
             }
-
-            hue = hue + 0.001;
-            rotation = rotation + 0.1 % (2.0 * std::f32::consts::PI);
 
             unsafe {
                 gl::ClearColor(0.76862745, 0.71372549, 0.94901961, 1.0); // moon raker, full opacity
@@ -208,6 +227,20 @@ fn main() {
                 // Make sure the VAO is selected before we call draw
                 gl::BindVertexArray(vao_id);
 
+                // Activate shader to draw elements and update uniforms
+                shader.activate();
+
+                let mut transformation: glm::Mat4 = glm::Mat4::identity();
+                transformation =
+                    glm::translation(&glm::vec3(-camera.x, -camera.y, -camera.z - 2.0))
+                        * transformation;
+                transformation =
+                    glm::rotation(camera.yaw, &glm::vec3(0.0, 1.0, 0.0)) * transformation;
+                transformation =
+                    glm::rotation(camera.pitch, &glm::vec3(1.0, 0.0, 0.0)) * transformation;
+                transformation = glm::perspective(fovy, 45f32, 1.0, 100.0) * transformation;
+
+                gl::UniformMatrix4fv(2, 1, gl::FALSE, transformation.as_ptr());
                 // Draw scene
                 gl::DrawElements(
                     gl::TRIANGLES,
@@ -215,18 +248,6 @@ fn main() {
                     gl::UNSIGNED_INT,
                     ptr::null(),
                 );
-
-                shader.activate();
-
-                let rot_matrix = glm::Mat4::from([
-                    [rotation.cos(), -rotation.sin(), 0.0, 0.0],
-                    [rotation.sin(), rotation.cos(), 0.0, 0.0],
-                    [0.0, 0.0, 1.0, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ]);
-
-                gl::UniformMatrix4fv(2, 1, gl::FALSE, rot_matrix.as_ptr());
-                gl::Uniform3f(3, hue, 1.0, 1.0);
             }
 
             context.swap_buffers().unwrap();
