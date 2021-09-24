@@ -19,9 +19,9 @@ impl Camera {
     pub fn move_mouse(&mut self, x: f32, y: f32) {
         self.yaw = self.yaw + x * SENSITIVITY;
         if self.yaw > YAW_MAX {
-            self.yaw -= YAW_MAX;
+            self.yaw -= 2.0 * YAW_MAX;
         } else if self.yaw < -YAW_MAX {
-            self.yaw += YAW_MAX;
+            self.yaw += 2.0 * YAW_MAX;
         }
 
         self.pitch = self.pitch + y * SENSITIVITY;
