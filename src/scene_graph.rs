@@ -26,6 +26,7 @@ pub struct SceneNode {
 
     pub vao_id      : u32,             // What I should draw
     pub index_count : i32,             // How much of it I shall draw
+    pub shader_id   : u32,
 
     pub children: Vec<*mut SceneNode>, // Those I command
 }
@@ -40,12 +41,13 @@ impl SceneNode {
             reference_point : glm::zero(),
             current_transformation_matrix: glm::identity(),
             vao_id          : 0,
+            shader_id       : 0,
             index_count     : -1,
             children        : vec![],
         })))
     }
 
-    pub fn from_vao(vao_id: u32, index_count: i32) -> Node {
+    pub fn from_vao(vao_id: u32, shader_id: u32, index_count: i32) -> Node {
         ManuallyDrop::new(Pin::new(Box::new(SceneNode {
             position        : glm::zero(),
             rotation        : glm::zero(),
@@ -54,6 +56,7 @@ impl SceneNode {
             current_transformation_matrix: glm::identity(),
             vao_id,
             index_count,
+            shader_id,
             children: vec![],
         })))
     }

@@ -1,13 +1,16 @@
 extern crate nalgebra_glm as glm;
 
+use std::ptr;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
-use std::{mem, os::raw::c_void, ptr};
 
-pub use self::camera::Camera;
+use self::camera::Camera;
+use self::scene_graph::SceneNode;
 
 mod camera;
 mod colors;
+mod mesh;
+mod scene_graph;
 mod shader;
 mod shapes;
 mod tasks;
@@ -26,31 +29,6 @@ use glutin::event_loop::ControlFlow;
 const SCREEN_W: u32 = 800;
 const SCREEN_H: u32 = 600;
 
-// == // Helper functions to make interacting with OpenGL a little bit prettier. You *WILL* need these! // == //
-// The names should be pretty self explanatory
-
-fn byte_size_of_array<T>(val: &[T]) -> isize {
-    std::mem::size_of_val(&val[..]) as isize
-}
-
-/// Get the OpenGL-compatible pointer to an arbitrary array of numbers
-fn pointer_to_array<T>(val: &[T]) -> *const c_void {
-    &val[0] as *const T as *const c_void
-}
-
-/// Get the size of the given type in bytes
-fn size_of<T>() -> i32 {
-    mem::size_of::<T>() as i32
-}
-
-/// Get an offset in bytes for n units of type T
-fn offset<T>(n: u32) -> *const c_void {
-    (n * mem::size_of::<T>() as u32) as *const T as *const c_void
-}
-
-// Get a null pointer (equivalent to an offset of 0)
-// ptr::null()
-
 /// Makes a new buffer and fills it with the given data values. Leaves the created
 /// buffer bound
 unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) -> u32 {
@@ -62,8 +40,8 @@ unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) -> u32 {
     gl::BindBuffer(target, buffer_id);
     gl::BufferData(
         target,
-        byte_size_of_array(values),
-        pointer_to_array(values),
+        util::byte_size_of_array(values),
+        util::pointer_to_array(values),
         gl::STATIC_DRAW,
     );
 
@@ -72,7 +50,12 @@ unsafe fn make_buffer<T>(target: gl::types::GLenum, values: &Vec<T>) -> u32 {
 
 /// Makes a new VAO, feeds the vertices to a new VBO for said VAO and makes an index buffer
 /// with the given indices
-unsafe fn make_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -> u32 {
+unsafe fn make_vao(
+    vertices: &Vec<f32>,
+    indices: &Vec<u32>,
+    colors: &Vec<f32>,
+    normals: &Vec<f32>,
+) -> u32 {
     let mut id = 0u32;
     // Make and bind VAO
     gl::GenVertexArrays(1, &mut id as *mut u32);
@@ -85,12 +68,112 @@ unsafe fn make_vao(vertices: &Vec<f32>, indices: &Vec<u32>, colors: &Vec<f32>) -
     make_buffer(gl::ARRAY_BUFFER, colors);
     gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, 0, ptr::null());
 
+    make_buffer(gl::ARRAY_BUFFER, normals);
+    gl::VertexAttribPointer(2, 3, gl::FLOAT, gl::FALSE, 0, ptr::null());
+
     gl::EnableVertexAttribArray(0);
     gl::EnableVertexAttribArray(1);
+    gl::EnableVertexAttribArray(2);
 
     make_buffer(gl::ELEMENT_ARRAY_BUFFER, indices);
 
     id
+}
+
+unsafe fn make_mesh_vao(mesh: &mesh::Mesh) -> u32 {
+    make_vao(&mesh.vertices, &mesh.indices, &mesh.colors, &mesh.normals)
+}
+
+unsafe fn draw_mesh_vao(
+    vao_id: &u32,
+    index_count: &i32,
+    transform: &glm::Mat4,
+    shader_id: &u32,
+    transform_uniform_loc: &i32,
+) {
+    // Make sure the VAO is selected before we call draw
+    gl::BindVertexArray(*vao_id);
+
+    // Activate shader to draw elements and update uniforms
+    gl::UseProgram(*shader_id);
+
+    gl::UniformMatrix4fv(*transform_uniform_loc, 1, gl::FALSE, transform.as_ptr());
+    // Draw scene
+    gl::DrawElements(
+        gl::TRIANGLES,
+        *index_count,
+        gl::UNSIGNED_INT,
+        ptr::null(),
+    );
+}
+
+unsafe fn draw_scene(node: &scene_graph::SceneNode, view_transform: &glm::Mat4) {
+    if node.vao_id > 0 {
+        draw_mesh_vao(&node.vao_id, &node.index_count, &view_transform, &node.shader_id, &3i32);
+    }
+
+    for &child in &node.children {
+        draw_scene(&*child, view_transform);
+    }
+}
+
+fn make_scene_graph() -> scene_graph::Node {
+    let terrain = mesh::Terrain::load("resources/lunarsurface.obj");
+    let helicopter = mesh::Helicopter::load("resources/helicopter.obj");
+
+    // Set up terrain VAO and load shader
+    let terrain_vao_id = unsafe { make_mesh_vao(&terrain) };
+    let terrain_shader = unsafe {
+        shader::ShaderBuilder::new()
+            .attach_file("shaders/terrain.vert")
+            .attach_file("shaders/terrain.frag")
+            .link()
+    };
+
+    // Helicopter VAOs and shader
+    let helicopter_body_vao_id = unsafe { make_mesh_vao(&helicopter.body) };
+    let helicopter_door_vao_id = unsafe { make_mesh_vao(&helicopter.door) };
+    let helicopter_main_rot_vao_id = unsafe { make_mesh_vao(&helicopter.main_rotor) };
+    let helicopter_tail_rot_vao_id = unsafe { make_mesh_vao(&helicopter.tail_rotor) };
+    let helicopter_shader = unsafe {
+        shader::ShaderBuilder::new()
+            .attach_file("shaders/helicopter.vert")
+            .attach_file("shaders/helicopter.frag")
+            .link()
+    };
+
+    let mut terrain_node = SceneNode::from_vao(
+        terrain_vao_id,
+        terrain_shader.program_id,
+        terrain.index_count,
+    );
+
+    let mut helicopter_node = SceneNode::from_vao(
+        helicopter_body_vao_id,
+        helicopter_shader.program_id,
+        helicopter.body.index_count,
+    );
+    helicopter_node.add_child(&SceneNode::from_vao(
+        helicopter_door_vao_id,
+        helicopter_shader.program_id,
+        helicopter.door.index_count,
+    ));
+    helicopter_node.add_child(&SceneNode::from_vao(
+        helicopter_main_rot_vao_id,
+        helicopter_shader.program_id,
+        helicopter.main_rotor.index_count,
+    ));
+    helicopter_node.add_child(&SceneNode::from_vao(
+        helicopter_tail_rot_vao_id,
+        helicopter_shader.program_id,
+        helicopter.tail_rotor.index_count,
+    ));
+
+    terrain_node.add_child(&helicopter_node);
+
+    let mut root = SceneNode::new();
+    root.add_child(&terrain_node);
+    root
 }
 
 fn main() {
@@ -119,13 +202,8 @@ fn main() {
     // Make a reference of this tuple to send to the render thread
     let mouse_delta = Arc::clone(&arc_mouse_delta);
 
-    let mut camera = Camera {
-        x: 0.0,
-        y: -2.0,
-        z: -1.0,
-        yaw: 0.0,
-        pitch: -1.2,
-    };
+    // Instantiate camera and load terrain
+    let mut camera = Camera::new();
 
     // This will not change in our case, so no need to recalculate every frame
     let fovy = (SCREEN_H as f32) / (SCREEN_W as f32);
@@ -164,21 +242,10 @@ fn main() {
             );
         }
 
-        let (vertices, indices, colors) = tasks::assignment2_task4b();
-
-        // Set up VAO
-        let vao_id = unsafe { make_vao(&vertices, &indices, &colors) };
-
-        // Load shaders
-        let shader = unsafe {
-            shader::ShaderBuilder::new()
-                .attach_file("shaders/simple.vert")
-                .attach_file("shaders/simple.frag")
-                .link()
-        };
-
         let first_frame_time = std::time::Instant::now();
         let mut last_frame_time = first_frame_time;
+        
+        let root_node = make_scene_graph();
 
         // The main rendering loop
         loop {
@@ -224,12 +291,6 @@ fn main() {
                 gl::ClearColor(0.76862745, 0.71372549, 0.94901961, 1.0); // moon raker, full opacity
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
-                // Make sure the VAO is selected before we call draw
-                gl::BindVertexArray(vao_id);
-
-                // Activate shader to draw elements and update uniforms
-                shader.activate();
-
                 let mut transformation: glm::Mat4 = glm::Mat4::identity();
                 transformation =
                     glm::translation(&glm::vec3(-camera.x, -camera.y, -camera.z - 2.0))
@@ -238,16 +299,9 @@ fn main() {
                     glm::rotation(camera.yaw, &glm::vec3(0.0, 1.0, 0.0)) * transformation;
                 transformation =
                     glm::rotation(camera.pitch, &glm::vec3(1.0, 0.0, 0.0)) * transformation;
-                transformation = glm::perspective(fovy, 45f32, 1.0, 100.0) * transformation;
+                transformation = glm::perspective(fovy, 45f32, 1.0, 1000.0) * transformation;
 
-                gl::UniformMatrix4fv(2, 1, gl::FALSE, transformation.as_ptr());
-                // Draw scene
-                gl::DrawElements(
-                    gl::TRIANGLES,
-                    indices.len() as i32,
-                    gl::UNSIGNED_INT,
-                    ptr::null(),
-                );
+                draw_scene(&root_node, &transformation);
             }
 
             context.swap_buffers().unwrap();

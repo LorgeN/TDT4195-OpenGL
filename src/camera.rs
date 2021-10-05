@@ -1,10 +1,10 @@
 // Constants for making movement a bit more "comfortable"
-const MOVEMENT_SPEED: f32 = 1.0;
+const MOVEMENT_SPEED: f32 = 100.0;
 const SENSITIVITY: f32 = 0.001;
 
-const PITCH_MAX: f32 = std::f32::consts::PI;
-const YAW_MAX: f32 = std::f32::consts::PI / 2.0;
-
+// Allow looking straight up and down
+const PITCH_MAX: f32 = std::f32::consts::PI / 2.0;
+const YAW_MAX: f32 = std::f32::consts::PI;
 
 #[derive(Debug)]
 pub struct Camera {
@@ -16,6 +16,16 @@ pub struct Camera {
 }
 
 impl Camera {
+    pub fn new() -> Self {
+        Camera {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            yaw: 0.0,
+            pitch: 0.0,
+        }
+    }
+
     pub fn move_mouse(&mut self, x: f32, y: f32) {
         self.yaw = self.yaw + x * SENSITIVITY;
         if self.yaw > YAW_MAX {
