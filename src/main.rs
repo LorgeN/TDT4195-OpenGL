@@ -253,14 +253,12 @@ fn main() {
     let cb = glutin::ContextBuilder::new().with_vsync(true);
     let windowed_context = cb.build_windowed(wb, &el).unwrap();
 
-    /*
     windowed_context
         .window()
         .set_cursor_grab(true)
         .expect("failed to grab cursor");
     windowed_context.window().set_cursor_visible(false);
-    */
-    
+
     // Set up a shared vector for keeping track of currently pressed keys
     let arc_pressed_keys = Arc::new(Mutex::new(Vec::<VirtualKeyCode>::with_capacity(10)));
     // Make a reference of this vector to send to the render thread
