@@ -1,9 +1,11 @@
 /// Utility function for generating a single triangle
+#[allow(dead_code)]
 pub fn generate_triangle_at(x: f32, y: f32, z: f32, size: f32) -> Vec<f32> {
     vec![x, y + size, z, x - size, y - size, z, x + size, y - size, z]
 }
 
 /// Utility function for generating vertices and indices for a grid of triangles
+#[allow(dead_code)]
 pub fn generate_triangles(x: u32, y: u32, z: Option<f32>) -> (Vec<f32>, Vec<u32>) {
     let mut vert: Vec<f32> = Vec::new();
 
@@ -38,6 +40,7 @@ pub fn generate_triangles(x: u32, y: u32, z: Option<f32>) -> (Vec<f32>, Vec<u32>
 }
 
 /// Utility function for generating a circle
+#[allow(dead_code)]
 pub fn generate_circle(r: f32, segments: u32) -> (Vec<f32>, Vec<u32>) {
     let mut vert = vec![0.0, 0.0, 0.0];
     let mut indices: Vec<u32> = Vec::new();
@@ -53,6 +56,7 @@ pub fn generate_circle(r: f32, segments: u32) -> (Vec<f32>, Vec<u32>) {
 }
 
 /// Utility function for generating a spiral
+#[allow(dead_code)]
 pub fn generate_spiral(
     total_radius: f32,
     segments: u32,

@@ -2,6 +2,7 @@ use rand::prelude::*;
 use rand::rngs::StdRng;
 
 /// Generates random RGBA values for the given vertex count
+#[allow(dead_code)]
 pub fn make_colors(vertex_count: u32) -> Vec<f32> {
     let mut rng = rand::thread_rng();
 
@@ -11,6 +12,7 @@ pub fn make_colors(vertex_count: u32) -> Vec<f32> {
         .collect()
 }
 
+#[allow(dead_code)]
 pub fn make_colors_seeded(vertex_count: u32, seed: u64) -> Vec<f32> {
     let mut rng = StdRng::seed_from_u64(seed);
 
@@ -20,6 +22,7 @@ pub fn make_colors_seeded(vertex_count: u32, seed: u64) -> Vec<f32> {
         .collect()
 }
 
+#[allow(dead_code)]
 pub fn make_colors_transparent_triangle(triangle_count: u32) -> Vec<f32> {
     let mut rng = rand::thread_rng();
 
