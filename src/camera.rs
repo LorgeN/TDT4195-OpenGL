@@ -26,6 +26,18 @@ impl Camera {
         }
     }
 
+    /// Makes a view projection matrix for the current camera position
+    pub fn make_view_transform(&self, fovy: f32) -> glm::Mat4 {
+        let mut transformation: glm::Mat4 = glm::Mat4::identity();
+        transformation =
+            glm::translation(&glm::vec3(-self.x, -self.y, -self.z - 2.0)) * transformation;
+        transformation = glm::rotation(self.yaw, &glm::vec3(0.0, 1.0, 0.0)) * transformation;
+        transformation = glm::rotation(self.pitch, &glm::vec3(1.0, 0.0, 0.0)) * transformation;
+        transformation = glm::perspective(fovy, 45f32, 1.0, 1000.0) * transformation;
+        transformation
+    }
+
+    /// Updates yaw and pitch based on mouse delta
     pub fn move_mouse(&mut self, x: f32, y: f32) {
         self.yaw = self.yaw + x * SENSITIVITY;
         if self.yaw > YAW_MAX {
@@ -41,6 +53,8 @@ impl Camera {
             self.pitch = -PITCH_MAX;
         }
     }
+
+    // These are pretty self explanatory
 
     pub fn move_forward(&mut self, delta_time: f32) {
         self.x += MOVEMENT_SPEED * delta_time * self.yaw.sin();

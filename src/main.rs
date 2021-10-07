@@ -105,6 +105,7 @@ unsafe fn draw_mesh_vao(
     gl::DrawElements(gl::TRIANGLES, *index_count, gl::UNSIGNED_INT, ptr::null());
 }
 
+/// Draws the given node and all children using the given view transform
 unsafe fn draw_scene(node: &SceneNode, view_transform: &glm::Mat4) {
     if node.vao_id > 0 {
         draw_mesh_vao(
@@ -121,6 +122,7 @@ unsafe fn draw_scene(node: &SceneNode, view_transform: &glm::Mat4) {
     }
 }
 
+/// Updates all node local transformations
 unsafe fn update_node_transformations(node: &mut SceneNode, initial_transform: &glm::Mat4) {
     // Construct transformation matrix
     let mut transform = glm::Mat4::identity();
@@ -141,6 +143,7 @@ unsafe fn update_node_transformations(node: &mut SceneNode, initial_transform: &
     }
 }
 
+/// Utility struct for keeping track of a helicopter model instance
 struct Helicopter {
     id: u32,
     body: scene_graph::Node,
@@ -150,10 +153,13 @@ struct Helicopter {
 }
 
 impl Helicopter {
+    /// The time for this specific helicopter, offset to compensate
+    /// for collisions between multiple helicopters in the scene
     fn get_time_with_offset(&mut self, time: f32, offset: f32) -> f32 {
         return time + (offset * self.id as f32);
     }
 
+    /// Updates rotor values to have spinning animation
     fn update_rotors(&mut self, time: f32, offset: f32) {
         let elapsed = self.get_time_with_offset(time, offset);
 
@@ -161,6 +167,7 @@ impl Helicopter {
         self.tail_rotor.rotation.x = elapsed * 15.0;
     }
 
+    /// Updates heading for this helicopter's animation
     fn update_heading(&mut self, time: f32, offset: f32) {
         let heading = toolbox::simple_heading_animation(self.get_time_with_offset(time, offset));
         self.body.position.x = heading.x;
@@ -171,6 +178,8 @@ impl Helicopter {
     }
 }
 
+/// Makes VAOs for helicopter model and instanties a given amount of scene
+/// nodes using them
 fn make_helicopters(shader_id: u32, amount: u32) -> Vec<Helicopter> {
     // Load meshes
     let model = mesh::Helicopter::load("resources/helicopter.obj");
@@ -216,17 +225,18 @@ fn make_helicopters(shader_id: u32, amount: u32) -> Vec<Helicopter> {
         .collect()
 }
 
+/// Makes a scene graph with the lunar terrain and the given amount of helicopters
 fn make_scene_graph(helicopters: u32) -> (scene_graph::Node, Vec<Helicopter>) {
     let terrain = mesh::Terrain::load("resources/lunarsurface.obj");
 
+    // Set up terrain VAO and load shader
+    let terrain_vao_id = unsafe { make_mesh_vao(&terrain) };
     let shader = unsafe {
         shader::ShaderBuilder::new()
             .attach_file("shaders/simple.vert")
             .attach_file("shaders/simple.frag")
             .link()
     };
-    // Set up terrain VAO and load shader
-    let terrain_vao_id = unsafe { make_mesh_vao(&terrain) };
 
     let mut terrain_node =
         SceneNode::from_vao(terrain_vao_id, shader.program_id, terrain.index_count);
@@ -269,11 +279,8 @@ fn main() {
     // Make a reference of this tuple to send to the render thread
     let mouse_delta = Arc::clone(&arc_mouse_delta);
 
-    // Instantiate camera and load terrain
+    // Instantiate camera
     let mut camera = Camera::new();
-
-    // This will not change in our case, so no need to recalculate every frame
-    let fovy = (SCREEN_H as f32) / (SCREEN_W as f32);
 
     // Spawn a separate thread for rendering, so event handling doesn't block rendering
     let render_thread = thread::spawn(move || {
@@ -312,6 +319,9 @@ fn main() {
         let first_frame_time = std::time::Instant::now();
         let mut last_frame_time = first_frame_time;
         let (mut root_node, mut helicopters) = make_scene_graph(HELICOPTER_COUNT);
+
+        // This will not change, so no need to recalculate for each frame
+        let fovy = (SCREEN_H as f32) / (SCREEN_W as f32);
         let offset = 15.0 / HELICOPTER_COUNT as f32;
 
         // The main rendering loop
@@ -364,18 +374,7 @@ fn main() {
                 gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
                 update_node_transformations(&mut root_node, &glm::Mat4::identity());
-
-                let mut transformation: glm::Mat4 = glm::Mat4::identity();
-                transformation =
-                    glm::translation(&glm::vec3(-camera.x, -camera.y, -camera.z - 2.0))
-                        * transformation;
-                transformation =
-                    glm::rotation(camera.yaw, &glm::vec3(0.0, 1.0, 0.0)) * transformation;
-                transformation =
-                    glm::rotation(camera.pitch, &glm::vec3(1.0, 0.0, 0.0)) * transformation;
-                transformation = glm::perspective(fovy, 45f32, 1.0, 1000.0) * transformation;
-
-                draw_scene(&root_node, &transformation);
+                draw_scene(&root_node, &camera.make_view_transform(fovy));
             }
 
             context.swap_buffers().unwrap();
