@@ -128,9 +128,9 @@ unsafe fn update_node_transformations(node: &mut SceneNode, initial_transform: &
     let mut transform = glm::Mat4::identity();
     // First translate by (subtract) reference point, then rotate, then translate back
     transform = glm::translation(&node.reference_point)
-        * glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0))
-        * glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0))
         * glm::rotation(node.rotation.x, &glm::vec3(1.0, 0.0, 0.0))
+        * glm::rotation(node.rotation.y, &glm::vec3(0.0, 1.0, 0.0))
+        * glm::rotation(node.rotation.z, &glm::vec3(0.0, 0.0, 1.0))
         * glm::translation(&-node.reference_point)
         * transform;
     transform = glm::translation(&node.position) * transform;
